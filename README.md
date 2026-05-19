@@ -21,7 +21,7 @@ MikroTik Minder is a boring, reliable maintenance orchestrator for MikroTik Rout
 | Backup | `/system backup save` binary backups | Use for same-device restore-oriented recovery artifacts; encrypt and store off-device |
 | Config export | `/export` text exports | Use for Git history, drift review, and human diffing |
 | Updates | `/system package update` | Use for check/download/install workflows instead of custom package logic |
-| RouterBOARD firmware | `/system routerboard print` and `upgrade` | Detect and align board firmware with installed RouterOS |
+| RouterBOARD firmware | `/system routerboard print` and `/system routerboard upgrade` | Detect and align board firmware with installed RouterOS |
 | Scheduling | `/system scheduler` | Reuse for device-local tasks only when needed; prefer central scheduling by Minder |
 | Reachability checks | Netwatch | Reuse for device-local probes, but centralize assurance/reporting in Minder |
 | Recovery | Watchdog | Treat as last-resort native protection, not as a replacement for change verification |
