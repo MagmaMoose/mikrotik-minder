@@ -2,16 +2,20 @@ name = "mikrotik-minder"
 main = "src/index.ts"
 compatibility_date = "2025-01-09"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+# No account_id here — safe for local dev and self-host.
+# The hosted production account is configured in [env.prod] below.
 
 # Run the dead-man-alert sweep every minute.
 [triggers]
 crons = ["* * * * *"]
 
-# D1 binding. Create the database with `npm run db:create` and paste the id below.
+# D1 binding for local dev / self-host.
+# Self-hosters: run `wrangler d1 create minder` and set your own database_id here.
 [[d1_databases]]
 binding = "DB"
 database_name = "minder"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
 
 # Secrets (set via `wrangler secret put ADMIN_TOKEN`):
@@ -23,8 +27,19 @@ migrations_dir = "migrations"
 DEFAULT_HEARTBEAT_INTERVAL_SECONDS = "3600"
 # Grace period added on top of the interval before a device is considered down.
 DEFAULT_GRACE_SECONDS = "600"
-# How many jobs/alerts to keep in the dashboard tables.
-DASHBOARD_ROWS = "50"
 
 [observability]
 enabled = true
+
+# ── Hosted production environment ──────────────────────────────────────────────
+# Used by CI only: `wrangler deploy --env prod` / `wrangler d1 migrations apply minder --remote --env prod`
+# Set CLOUDFLARE_ACCOUNT_ID in repo secrets; do NOT run this locally unless you
+# intend to mutate the production database.
+[env.prod]
+account_id = "6e26afa31c37dee1dc82ad2f214f9b3c"
+
+[[env.prod.d1_databases]]
+binding = "DB"
+database_name = "minder"
+database_id = "03bb68db-e2c1-4069-ad01-e32cce5efb32"
+migrations_dir = "migrations"
