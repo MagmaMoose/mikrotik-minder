@@ -34,10 +34,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{- define "mma.serviceAccountName" -}}
-{{- if .Values.serviceAccount.name -}}
-{{ .Values.serviceAccount.name }}
+{{- if .Values.serviceAccount.create -}}
+  {{- if .Values.serviceAccount.name -}}
+    {{- .Values.serviceAccount.name -}}
+  {{- else -}}
+    {{- include "mma.fullname" . -}}
+  {{- end -}}
 {{- else -}}
-{{ include "mma.fullname" . }}
+  {{- .Values.serviceAccount.name | default "default" -}}
 {{- end -}}
 {{- end -}}
 
