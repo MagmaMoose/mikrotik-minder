@@ -36,7 +36,9 @@ config:
     remote:
       url: git@github.com:acme/network-configs.git
       branch: main
-      ssh_key_path: /var/lib/mikrotik-minder/.ssh/git_deploy
+      # Key is mounted from a Secret at /etc/mikrotik-minder/ssh/ (outside
+      # the PVC) so a fresh install doesn't fail on a missing parent dir.
+      ssh_key_path: /etc/mikrotik-minder/ssh/git_deploy
   backup:
     dir: /var/lib/mikrotik-minder/backups
     password_env: MTM_BACKUP_PASSWORD
@@ -109,7 +111,7 @@ kubectl -n minder exec deploy/minder-mikrotik-minder-agent -- \
 | `config`                             | minimal placeholder                                        | Whatever you put here becomes `/etc/mikrotik-minder/config.yaml` verbatim. |
 | `secrets.create`                     | `true`                                                     | Toggle off when bringing your own Secret. |
 | `secrets.existingSecretName`         | `""`                                                       | Existing Secret name; pod uses `envFrom` against it. |
-| `git.sshKey`                         | `""`                                                       | PEM private key body. Mounted at `/var/lib/mikrotik-minder/.ssh/git_deploy` (mode 0400). |
+| `git.sshKey`                         | `""`                                                       | PEM private key body. Mounted at `/etc/mikrotik-minder/ssh/git_deploy` (mode 0400), outside the PVC. |
 | `git.knownHosts`                     | `""`                                                       | Optional `ssh-keyscan` output to pin remote hosts. |
 | `persistence.enabled`                | `true`                                                     | Set false to use `emptyDir` (loses git history on pod restart). |
 | `persistence.size`                   | `10Gi`                                                     | |

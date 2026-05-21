@@ -188,10 +188,11 @@ def _parse_server(raw: dict[str, Any], *, require_token: bool = True) -> ServerC
 
 def _parse_defaults(raw: dict[str, Any]) -> Defaults:
     transport = _parse_transport_policy(raw.get("transport") or {}) or TransportPolicy()
+    api_raw = raw.get("api", {}) or {}
     api = APIDefaults(
-        port=int(raw.get("api", {}).get("port", 8728)),
-        use_tls=bool(raw.get("api", {}).get("use_tls", False)),
-        tls_port=int(raw.get("api", {}).get("tls_port", 8729)),
+        port=int(api_raw.get("port", 8728)),
+        use_tls=_strict_bool(api_raw.get("use_tls"), "defaults.api.use_tls", default=False),
+        tls_port=int(api_raw.get("tls_port", 8729)),
     )
     ssh = SSHDefaults(
         port=int(raw.get("ssh", {}).get("port", 22)),
@@ -322,7 +323,7 @@ def _parse_device(raw: Any, idx: int) -> DeviceConfig:
         backup_interval_seconds=raw.get("backup_interval_seconds"),
         transport=transport,
         api_port=raw.get("api_port"),
-        use_tls=raw.get("use_tls"),
+        use_tls=_strict_bool(raw.get("use_tls"), f"devices[{idx}].use_tls"),
         ssh_port=raw.get("ssh_port"),
     )
 
@@ -343,6 +344,23 @@ def _require_str(raw: dict[str, Any], path: str) -> str:
     if not isinstance(val, str) or not val.strip():
         raise ConfigError(f"'{path}' is required and must be a non-empty string")
     return val.strip()
+
+
+def _strict_bool(value: Any, path: str, *, default: bool | None = None) -> bool | None:
+    """Reject string-form booleans.
+
+    Python's ``bool("false")`` is True, so unquoted YAML booleans round-trip
+    correctly but a quoted ``"false"`` would silently flip a flag. This helper
+    requires a real boolean (or ``None`` / missing → ``default``) and raises a
+    clear error otherwise.
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    raise ConfigError(
+        f"{path} must be a boolean (true/false). Got {type(value).__name__}: {value!r}",
+    )
 
 
 def _resolve_secret(raw: dict[str, Any], field_name: str, field_path: str) -> str | None:

@@ -58,7 +58,7 @@ read.get("/health", (c) => {
   return c.json({
     ok: true,
     name: "mikrotik-minder",
-    dashboard_rows: numEnv(c.env.DASHBOARD_ROWS, 50),
+    dashboard_rows: numEnv(c.env.DASHBOARD_ROWS, 50, 0),
   });
 });
 

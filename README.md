@@ -128,7 +128,9 @@ config:
     remote:
       url: git@github.com:acme/network-configs.git
       branch: main
-      ssh_key_path: /var/lib/mikrotik-minder/.ssh/git_deploy
+      # Chart mounts the git deploy Secret at /etc/mikrotik-minder/ssh/ (outside
+      # the PVC, so a fresh install can't fail on a missing parent dir).
+      ssh_key_path: /etc/mikrotik-minder/ssh/git_deploy
   backup:
     dir: /var/lib/mikrotik-minder/backups
     password_env: MTM_BACKUP_PASSWORD

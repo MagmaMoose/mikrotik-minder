@@ -38,10 +38,12 @@ config:
   git:
     repo: /var/lib/mikrotik-minder/configs
     # Optional offsite mirror. Pick one of ssh_key_path / token_env.
+    # The key is mounted from a Secret at /etc/mikrotik-minder/ssh/ — that's
+    # outside the PVC so a fresh install doesn't fail on a missing parent dir.
     # remote:
     #   url: git@github.com:acme/network-configs.git
     #   branch: main
-    #   ssh_key_path: /var/lib/mikrotik-minder/.ssh/git_deploy
+    #   ssh_key_path: /etc/mikrotik-minder/ssh/git_deploy
     #   push: true
   backup:
     dir: /var/lib/mikrotik-minder/backups
@@ -74,9 +76,10 @@ secrets:
     # CORE_RTR_01_PASSWORD: "..."         # one per device (password_env target)
 
 # ----------------------------------------------------------------------------
-# Git deploy key (optional). Mounted at /var/lib/mikrotik-minder/.ssh/git_deploy.
-# Provide the PRIVATE key contents (PEM) here. Used when config.git.remote
-# has ssh_key_path set to this path.
+# Git deploy key (optional). Mounted as a directory at /etc/mikrotik-minder/ssh/
+# (outside the PVC — directory mounts under the PVC fail on first install when
+# the .ssh subdir doesn't exist yet). Point config.git.remote.ssh_key_path at
+# /etc/mikrotik-minder/ssh/git_deploy when this is set.
 # ----------------------------------------------------------------------------
 git:
   sshKey: ""                  # private key contents (NOT base64)

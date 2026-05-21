@@ -94,6 +94,42 @@ def test_duplicate_device_names_rejected() -> None:
         })
 
 
+def test_quoted_string_use_tls_is_rejected() -> None:
+    """`bool('false')` is True. Strict-bool validation must catch quoted booleans."""
+    with pytest.raises(ConfigError, match="use_tls must be a boolean"):
+        parse_config({
+            "server": {"url": "https://x", "agent_token": "t"},
+            "defaults": {"api": {"use_tls": "false"}},
+            "devices": [
+                {"name": "a", "address": "10.0.0.1", "username": "u", "password": "p"},
+            ],
+        })
+
+
+def test_quoted_string_use_tls_per_device_is_rejected() -> None:
+    with pytest.raises(ConfigError, match=r"devices\[0\].use_tls must be a boolean"):
+        parse_config({
+            "server": {"url": "https://x", "agent_token": "t"},
+            "devices": [
+                {
+                    "name": "a", "address": "10.0.0.1", "username": "u", "password": "p",
+                    "use_tls": "true",  # quoted → rejected
+                },
+            ],
+        })
+
+
+def test_real_boolean_use_tls_is_accepted() -> None:
+    cfg = parse_config({
+        "server": {"url": "https://x", "agent_token": "t"},
+        "defaults": {"api": {"use_tls": True}},
+        "devices": [
+            {"name": "a", "address": "10.0.0.1", "username": "u", "password": "p"},
+        ],
+    })
+    assert cfg.defaults.api.use_tls is True
+
+
 def test_transport_override_per_device() -> None:
     cfg = parse_config({
         "server": {"url": "https://x", "agent_token": "t"},

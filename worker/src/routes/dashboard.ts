@@ -38,7 +38,7 @@ dashboard.post("/logout", (c) => {
 
 dashboard.get("/", async (c) => {
   if (!isAuthed(c)) return c.html(loginPage());
-  const rows = numEnv(c.env.DASHBOARD_ROWS, 50);
+  const rows = numEnv(c.env.DASHBOARD_ROWS, 50, 0);
 
   const [devicesRes, jobsRes, alertsRes, agentsRes] = await Promise.all([
     c.env.DB.prepare(
@@ -75,7 +75,7 @@ dashboard.get("/", async (c) => {
       alerts: alertsRes.results,
       agents: agentsRes.results,
       defaultInterval: numEnv(c.env.DEFAULT_HEARTBEAT_INTERVAL_SECONDS, 3600),
-      defaultGrace: numEnv(c.env.DEFAULT_GRACE_SECONDS, 600),
+      defaultGrace: numEnv(c.env.DEFAULT_GRACE_SECONDS, 600, 0),
     }),
   );
 });

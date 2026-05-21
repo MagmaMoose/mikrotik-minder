@@ -107,13 +107,26 @@ def parse_free_space_mib(value: str | None) -> float | None:
 
 
 def snapshot(channel: _Capture, *, timeout: float = 10.0) -> ResourceSnapshot:
-    """Pull the version / free space / identity used for before/after comparison."""
+    """Pull the version / free space / identity used for before/after comparison.
+
+    Two commands: ``/system identity get name`` for the operator-set device
+    name, and ``/system resource print`` for hardware / version state. We keep
+    them as distinct fields because ``board-name`` is the model (e.g.
+    ``RB5009UPr+S+``), not the identity an operator would search by.
+    """
     raw = channel.capture("/system resource print", timeout=timeout)
     kv = kv_dict(raw)
+    # identity is informational; if the second command fails for any reason
+    # (different transport, permission, network blip) we keep the snapshot.
+    try:
+        identity_raw = channel.capture(":put [/system identity get name]", timeout=timeout)
+    except (TransportError, OSError):
+        identity_raw = ""
+    identity = identity_raw.strip() or None
     return ResourceSnapshot(
         version=kv.get("version"),
         free_hdd_space=kv.get("free-hdd-space"),
-        identity=kv.get("board-name"),
+        identity=identity,
         uptime=kv.get("uptime"),
         board_name=kv.get("board-name"),
     )

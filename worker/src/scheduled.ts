@@ -15,7 +15,8 @@ interface DeviceRow {
 
 export async function runScheduledSweep(env: Env, ctx: ExecutionContext): Promise<void> {
   const defaultInterval = numEnv(env.DEFAULT_HEARTBEAT_INTERVAL_SECONDS, 3600);
-  const defaultGrace = numEnv(env.DEFAULT_GRACE_SECONDS, 600);
+  // Grace can legitimately be 0 ("alert the moment we're past the interval").
+  const defaultGrace = numEnv(env.DEFAULT_GRACE_SECONDS, 600, 0);
   const now = nowSeconds();
 
   const { results } = await env.DB.prepare(
@@ -32,16 +33,27 @@ export async function runScheduledSweep(env: Env, ctx: ExecutionContext): Promis
 
   if (stale.length === 0) return;
 
+  // Race guard: only flip to 'down' when last_seen_at hasn't moved since our
+  // SELECT and the device isn't already 'down'. A heartbeat landing between
+  // the SELECT and this UPDATE will bump last_seen_at and the WHERE clause
+  // turns this into a no-op (meta.changes === 0), preventing the false alert.
+  const lost: DeviceRow[] = [];
   for (const d of stale) {
-    await env.DB.prepare(
-      `UPDATE devices SET last_status = 'down', last_status_changed_at = ?1 WHERE id = ?2`,
+    const res = await env.DB.prepare(
+      `UPDATE devices SET last_status = 'down', last_status_changed_at = ?1
+       WHERE id = ?2 AND last_seen_at = ?3 AND last_status != 'down'`,
     )
-      .bind(now, d.id)
+      .bind(now, d.id, d.last_seen_at)
       .run();
+    if ((res.meta.changes ?? 0) > 0) {
+      lost.push(d);
+    }
   }
 
+  if (lost.length === 0) return;
+
   await Promise.all(
-    stale.map((d) => {
+    lost.map((d) => {
       const lastSeenAgo = d.last_seen_at ? now - d.last_seen_at : null;
       return fireAlert(
         env,

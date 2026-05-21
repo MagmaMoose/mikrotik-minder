@@ -11,6 +11,10 @@ on:
       - "worker/**"
       - ".github/workflows/worker-ci.yml"
 
+# Default GITHUB_TOKEN permissions for every job — read-only.
+permissions:
+  contents: read
+
 concurrency:
   group: worker-ci-${{ github.ref }}
   cancel-in-progress: true
@@ -18,12 +22,14 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: worker
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "20"
           cache: npm

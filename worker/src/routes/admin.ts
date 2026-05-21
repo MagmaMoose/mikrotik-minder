@@ -214,12 +214,19 @@ admin.delete("/alert-routes/:id", async (c) => {
 admin.post("/alerts/test", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const message = typeof body?.message === "string" ? body.message : "Test alert from Mikrotik Minder";
-  const alertId = await fireAlert(c.env, {
-    severity: "info",
-    kind: "manual",
-    title: message,
-    payload: { source: "admin", note: "manual test" },
-  });
+  // Pass executionCtx so the outbound webhook fan-out runs via waitUntil()
+  // and the API can respond immediately after persisting the alert row.
+  // Otherwise a slow Slack/Discord sink would block this endpoint.
+  const alertId = await fireAlert(
+    c.env,
+    {
+      severity: "info",
+      kind: "manual",
+      title: message,
+      payload: { source: "admin", note: "manual test" },
+    },
+    c.executionCtx,
+  );
   return c.json({ ok: true, alert_id: alertId });
 });
 

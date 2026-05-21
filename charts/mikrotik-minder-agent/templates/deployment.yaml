@@ -58,16 +58,14 @@ spec:
             - name: tmp
               mountPath: /tmp
             {{- if .Values.git.sshKey }}
+            # The git deploy key and known_hosts are mounted as a directory
+            # OUTSIDE the PVC. Using subPath under /var/lib/mikrotik-minder/.ssh
+            # would fail on a fresh PVC because the volume hides the image's
+            # pre-created .ssh dir. Configure git.remote.ssh_key_path to point
+            # at /etc/mikrotik-minder/ssh/git_deploy.
             - name: git-ssh
-              mountPath: /var/lib/mikrotik-minder/.ssh/git_deploy
-              subPath: git_deploy
+              mountPath: /etc/mikrotik-minder/ssh
               readOnly: true
-            {{- if .Values.git.knownHosts }}
-            - name: git-ssh
-              mountPath: /var/lib/mikrotik-minder/.ssh/known_hosts
-              subPath: known_hosts
-              readOnly: true
-            {{- end }}
             {{- end }}
       volumes:
         - name: config
