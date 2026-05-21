@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.1.0 (2026-05-21)
+
+### Bug Fixes
+
+- Address review feedback on secrets, prod env isolation, wrangler pin
+  ([`ca22381`](https://github.com/MagmaMoose/mikrotik-minder/commit/ca22381d4756742e1d052e071606e592cde38a20))
+
+
 ## v1.0.0 (2026-05-21)
 
 ### Bug Fixes
