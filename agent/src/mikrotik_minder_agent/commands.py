@@ -245,9 +245,9 @@ def _run_sensitive_export(
 ) -> None:
     """Capture ``/export show-sensitive`` and return the text as a one-shot artifact.
 
-    Unlike the regular export pipeline, the body is NOT normalised, NOT committed
-    to git, and NOT persisted on the agent. It's delivered exactly once via the
-    control plane's purge-on-read artifact endpoint.
+    Unlike the regular export pipeline, the body is NOT committed to git, NOT
+    persisted on the agent, and NOT normalised beyond CRLF→LF conversion. It is
+    delivered exactly once via the control plane's purge-on-read artifact endpoint.
     """
     ssh = SSHTransport(device, config.defaults)
     try:
