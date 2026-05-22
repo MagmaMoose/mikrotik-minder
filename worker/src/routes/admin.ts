@@ -295,7 +295,7 @@ admin.get("/commands/:id/artifact", async (c) => {
   )
     .bind(id)
     .first<{ artifact: string | null }>();
-  if (!row) {
+  if (!row || row.artifact === null) {
     // Either the row doesn't exist, or artifact was already NULL (already downloaded)
     const cmd = await c.env.DB.prepare("SELECT id, status FROM commands WHERE id = ?1").bind(id).first<{ id: string; status: string }>();
     if (!cmd) return c.json({ error: "not found" }, 404);
