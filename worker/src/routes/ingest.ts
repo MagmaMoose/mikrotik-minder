@@ -267,7 +267,8 @@ ingest.post("/commands/:id/result", async (c) => {
   if (result !== undefined && (typeof result !== "object" || result === null || Array.isArray(result))) {
     return c.json({ error: "result must be an object" }, 400);
   }
-  const artifact = asOptionalString(body?.artifact, "artifact", { max: 5_000_000 });
+  // Use a custom validator that preserves the original string verbatim (no trimming)
+  const artifact = validateArtifact(body?.artifact);
   if (!artifact.ok) return c.json({ error: artifact.error }, 400);
 
   const res = await c.env.DB.prepare(
@@ -288,5 +289,18 @@ ingest.post("/commands/:id/result", async (c) => {
   }
   return c.json({ ok: true });
 });
+
+function validateArtifact(value: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (value === undefined || value === null) {
+    return { ok: true, value: null };
+  }
+  if (typeof value !== "string") {
+    return { ok: false, error: "artifact must be a string" };
+  }
+  if (value.length > 5_000_000) {
+    return { ok: false, error: "artifact must be at most 5,000,000 characters" };
+  }
+  return { ok: true, value };
+}
 
 export default ingest;
