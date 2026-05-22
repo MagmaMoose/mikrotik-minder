@@ -194,9 +194,28 @@ class Daemon:
         # Determine the command kind.
         command_kind = cmd.kind
         if command_kind in ("export", "sensitive_export"):
-            self._run_export(device, minder)
+            # Use execute_command to ensure reporting, then update timestamp
+            execute_command(
+                cmd,
+                self._config,
+                minder=minder,
+                exporter=self._exporter,
+                backup_runner=self._backup_runner,
+            )
+            state = self._state[device.name]
+            with state.lock:
+                state.last_export = time.time()
         elif command_kind == "backup":
-            self._run_backup(device, minder)
+            execute_command(
+                cmd,
+                self._config,
+                minder=minder,
+                exporter=self._exporter,
+                backup_runner=self._backup_runner,
+            )
+            state = self._state[device.name]
+            with state.lock:
+                state.last_backup = time.time()
         else:
             # For other commands (e.g., update_apply), just execute directly.
             execute_command(
