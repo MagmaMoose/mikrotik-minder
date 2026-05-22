@@ -64,7 +64,7 @@ def execute_command(
                 "failed",
                 result={"error": f"unknown command kind {cmd.kind!r}"},
             )
-    except Exception as exc:  # noqa: BLE001 — never let one bad command kill the poller
+    except Exception as exc:  # never let one bad command kill the whole poller
         log.exception("command %s dispatcher error", cmd.id)
         _report(minder, cmd.id, "failed", result={"error": f"dispatcher error: {exc}"})
 
@@ -98,7 +98,10 @@ def _run_backup(
         "pruned": res.pruned,
     }
     summary = backup_summary(res)
-    _send_job(minder, device, "backup", "success", res.started_at, res.finished_at, summary, details)
+    _send_job(
+        minder, device, "backup", "success",
+        res.started_at, res.finished_at, summary, details,
+    )
     _report(minder, cmd.id, "succeeded", result={"summary": summary, **details})
 
 
