@@ -243,8 +243,8 @@ admin.post("/commands", async (c) => {
   if (!kind.ok) return c.json({ error: kind.error }, 400);
   const scheduledFor = asOptionalInt(body?.scheduled_for, "scheduled_for", { min: 0 });
   if (!scheduledFor.ok) return c.json({ error: scheduledFor.error }, 400);
-  const requestedBy = asOptionalString(body?.requested_by, "requested_by", { max: 320 });
-  if (!requestedBy.ok) return c.json({ error: requestedBy.error }, 400);
+  // Derive requested_by from the authenticated user (set by requireAdmin middleware)
+  const requestedBy = c.get("user")?.email ?? "unknown";
   const params = body?.params;
   if (
     params !== undefined &&
@@ -271,7 +271,7 @@ admin.post("/commands", async (c) => {
       kind.value,
       params !== undefined ? JSON.stringify(params) : null,
       scheduledFor.value ?? null,
-      requestedBy.value ?? null,
+      requestedBy,
       nowSeconds(),
     )
     .run();
