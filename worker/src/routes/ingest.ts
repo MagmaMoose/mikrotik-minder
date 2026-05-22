@@ -227,16 +227,14 @@ ingest.get("/commands", async (c) => {
          AND (scheduled_for IS NULL OR scheduled_for <= ?1)
        ORDER BY created_at LIMIT 20
      )
-     RETURNING id, device_id, kind, params`,
+     RETURNING commands.id, commands.device_id, commands.kind, commands.params, devices.name AS device_name
+     JOIN devices ON devices.id = commands.device_id`,
   )
     .bind(now, agentId)
-    .all<{ id: string; device_id: string; kind: string; params: string | null }>();
+    .all<{ id: string; device_id: string; kind: string; params: string | null; device_name: string }>();
 
   const commands = [];
   for (const r of results) {
-    const dev = await c.env.DB.prepare("SELECT name FROM devices WHERE id = ?1")
-      .bind(r.device_id)
-      .first<{ name: string }>();
     let params: Record<string, unknown> = {};
     if (r.params) {
       try {
@@ -247,7 +245,7 @@ ingest.get("/commands", async (c) => {
     }
     commands.push({
       id: r.id,
-      device: dev?.name ?? null,
+      device: r.device_name,
       kind: r.kind,
       params,
     });
