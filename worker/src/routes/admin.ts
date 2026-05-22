@@ -301,7 +301,11 @@ admin.get("/commands/:id/artifact", async (c) => {
     if (!exists) return c.json({ error: "not found" }, 404);
     return c.json({ error: "no artifact — already downloaded, or none produced" }, 410);
   }
-  return c.text(row.artifact, 200, { "content-type": "text/plain; charset=utf-8" });
+  return c.text(row.artifact, 200, {
+    "content-type": "text/plain; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+  });
 });
 
 export default admin;
