@@ -19,3 +19,4 @@ CREATE TABLE commands (
 );
 CREATE INDEX commands_agent_idx  ON commands(agent_id, status);
 CREATE INDEX commands_device_idx ON commands(device_id, created_at DESC);
+CREATE INDEX commands_claim_idx  ON commands(agent_id, status, created_at);
