@@ -243,8 +243,8 @@ admin.post("/commands", async (c) => {
   if (!kind.ok) return c.json({ error: kind.error }, 400);
   const scheduledFor = asOptionalInt(body?.scheduled_for, "scheduled_for", { min: 0 });
   if (!scheduledFor.ok) return c.json({ error: scheduledFor.error }, 400);
-  // Derive requested_by from the authenticated user (set by requireAdmin middleware)
-  const requestedBy = c.get("user")?.email ?? "unknown";
+  // Derive requested_by from the X-Auth-Email header (set by Cloudflare Access)
+  const requestedBy = c.req.header("X-Auth-Email") ?? "unknown";
   const params = body?.params;
   if (
     params !== undefined &&
