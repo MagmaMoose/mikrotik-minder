@@ -153,7 +153,7 @@ ingest.post("/jobs", async (c) => {
     await fireAlert(
       c.env,
       {
-        severity: "warning",
+        severity: "info",
         kind: "drift_detected",
         agent_id: agentId,
         device_id: deviceId ?? undefined,
@@ -177,6 +177,34 @@ ingest.post("/jobs", async (c) => {
         job_id: id,
         title: `${kind.value === "firmware_align" ? "Firmware mismatch" : "Update available"}${deviceLabel ? ` on ${deviceLabel}` : ""}`,
         payload: { kind: kind.value, summary: summary.value, device: deviceLabel },
+      },
+      c.executionCtx,
+    );
+  } else if (status.value === "success" && kind.value === "backup") {
+    await fireAlert(
+      c.env,
+      {
+        severity: "info",
+        kind: "backup_succeeded",
+        agent_id: agentId,
+        device_id: deviceId ?? undefined,
+        job_id: id,
+        title: `Backup completed${deviceLabel ? ` for ${deviceLabel}` : ""}`,
+        payload: { device: deviceLabel, summary: summary.value },
+      },
+      c.executionCtx,
+    );
+  } else if (status.value === "success" && kind.value === "update_apply") {
+    await fireAlert(
+      c.env,
+      {
+        severity: "info",
+        kind: "update_applied",
+        agent_id: agentId,
+        device_id: deviceId ?? undefined,
+        job_id: id,
+        title: `Update applied${deviceLabel ? ` to ${deviceLabel}` : ""}`,
+        payload: { device: deviceLabel, summary: summary.value },
       },
       c.executionCtx,
     );

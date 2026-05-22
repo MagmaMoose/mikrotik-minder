@@ -28,10 +28,11 @@ migrations_dir = "migrations"
 DEFAULT_HEARTBEAT_INTERVAL_SECONDS = "3600"
 # Grace period added on top of the interval before a device is considered down.
 DEFAULT_GRACE_SECONDS = "600"
-# Slack channels (only used when the SLACK_BOT_TOKEN secret is set).
-# info-severity alerts go to SUCCESS, warning/critical go to FAILURE.
+# Slack channels (only used when the SLACK_BOT_TOKEN secret is set). Alerts are
+# routed by kind: wins → SUCCESS, config changes → INFO, the rest → FAILURE.
 SLACK_SUCCESS_CHANNEL = ""
 SLACK_FAILURE_CHANNEL = ""
+SLACK_INFO_CHANNEL = ""
 
 [observability]
 enabled = true
@@ -54,9 +55,11 @@ crons = ["* * * * *"]
 [env.prod.vars]
 DEFAULT_HEARTBEAT_INTERVAL_SECONDS = "3600"
 DEFAULT_GRACE_SECONDS = "600"
-# magmamoose Slack: #mikrotik-minder (success) / #engineering-alerts (failure)
+# magmamoose Slack: #mikrotik-minder (wins) / #engineering-alerts (failures) /
+# #engineering-info (config changes)
 SLACK_SUCCESS_CHANNEL = "C0B5BJDHZTM"
 SLACK_FAILURE_CHANNEL = "C0A9FT7355Z"
+SLACK_INFO_CHANNEL = "C0A9RSQ3G92"
 
 [env.prod.observability]
 enabled = true

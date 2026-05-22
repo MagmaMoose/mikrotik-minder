@@ -39,6 +39,23 @@ const SEVERITY_COLOR_DISCORD: Record<Severity, number> = {
   critical: 0xd72631,
 };
 
+// Which Slack channel an alert lands in, chosen by kind (not severity):
+//   success → SLACK_SUCCESS_CHANNEL  (#mikrotik-minder)   — good news / wins
+//   info    → SLACK_INFO_CHANNEL     (#engineering-info)  — config changes
+//   failure → SLACK_FAILURE_CHANNEL  (#engineering-alerts) — needs attention
+const SLACK_CHANNEL_CLASS: Record<AlertKind, "success" | "info" | "failure"> = {
+  heartbeat_recovered: "success",
+  backup_succeeded: "success",
+  update_applied: "success",
+  manual: "success",
+  drift_detected: "info",
+  heartbeat_missed: "failure",
+  job_failed: "failure",
+  update_available: "failure",
+  update_failed: "failure",
+  restore_due: "failure",
+};
+
 export async function fireAlert(
   env: Env,
   input: AlertInput,
@@ -85,14 +102,20 @@ export async function deliverAlert(env: Env, alert: StoredAlert): Promise<void> 
 /**
  * Post an alert to Slack via chat.postMessage using a bot token.
  *
- * Channel is chosen by severity: `info` → SLACK_SUCCESS_CHANNEL (good news),
- * `warning`/`critical` → SLACK_FAILURE_CHANNEL (needs attention). An unset
- * channel for a given class is simply skipped.
+ * The channel is chosen by alert kind (see SLACK_CHANNEL_CLASS): wins →
+ * SUCCESS, config changes → INFO, everything else → FAILURE. INFO falls back
+ * to FAILURE when SLACK_INFO_CHANNEL is unset; an unset target channel is
+ * simply skipped.
  */
 async function deliverToSlackBot(env: Env, alert: StoredAlert): Promise<void> {
+  const cls = SLACK_CHANNEL_CLASS[alert.kind];
   const channel =
-    alert.severity === "info" ? env.SLACK_SUCCESS_CHANNEL : env.SLACK_FAILURE_CHANNEL;
-  if (!channel) return; // no channel configured for this severity class
+    cls === "success"
+      ? env.SLACK_SUCCESS_CHANNEL
+      : cls === "info"
+        ? env.SLACK_INFO_CHANNEL || env.SLACK_FAILURE_CHANNEL
+        : env.SLACK_FAILURE_CHANNEL;
+  if (!channel) return; // no channel configured for this class
 
   try {
     const res = await fetch("https://slack.com/api/chat.postMessage", {

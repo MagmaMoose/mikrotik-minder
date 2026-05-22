@@ -74,6 +74,8 @@ export const ALERT_KINDS = [
   "drift_detected",
   "update_available",
   "update_failed",
+  "backup_succeeded",
+  "update_applied",
   "restore_due",
   "manual",
 ] as const;
