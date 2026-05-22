@@ -297,8 +297,11 @@ admin.get("/commands/:id/artifact", async (c) => {
     .first<{ artifact: string | null }>();
   if (!row) {
     // Either the row doesn't exist, or artifact was already NULL (already downloaded)
-    const exists = await c.env.DB.prepare("SELECT id FROM commands WHERE id = ?1").bind(id).first();
-    if (!exists) return c.json({ error: "not found" }, 404);
+    const cmd = await c.env.DB.prepare("SELECT id, status FROM commands WHERE id = ?1").bind(id).first<{ id: string; status: string }>();
+    if (!cmd) return c.json({ error: "not found" }, 404);
+    if (cmd.status === "pending" || cmd.status === "claimed") {
+      return c.json({ error: "command not yet ready" }, 202);
+    }
     return c.json({ error: "no artifact — already downloaded, or none produced" }, 410);
   }
   return c.text(row.artifact, 200, {
