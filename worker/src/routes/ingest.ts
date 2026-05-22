@@ -237,11 +237,19 @@ ingest.get("/commands", async (c) => {
     const dev = await c.env.DB.prepare("SELECT name FROM devices WHERE id = ?1")
       .bind(r.device_id)
       .first<{ name: string }>();
+    let params: Record<string, unknown> = {};
+    if (r.params) {
+      try {
+        params = JSON.parse(r.params);
+      } catch {
+        params = {};
+      }
+    }
     commands.push({
       id: r.id,
       device: dev?.name ?? null,
       kind: r.kind,
-      params: r.params ? JSON.parse(r.params) : {},
+      params,
     });
   }
   return c.json({ commands });
