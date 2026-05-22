@@ -18,8 +18,9 @@ database_name = "minder"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
 
-# Secrets (set via `wrangler secret put ADMIN_TOKEN`):
-#   ADMIN_TOKEN  - bearer token for /v1/admin/* endpoints. Long random string.
+# Secrets (set via `wrangler secret put <NAME>`):
+#   ADMIN_TOKEN      - bearer token for /v1/admin/* endpoints. Long random string.
+#   SLACK_BOT_TOKEN  - optional. xoxb-… bot token; enables Slack alert delivery.
 #
 # Public-facing vars below are non-secret runtime tuning knobs.
 [vars]
@@ -27,6 +28,11 @@ migrations_dir = "migrations"
 DEFAULT_HEARTBEAT_INTERVAL_SECONDS = "3600"
 # Grace period added on top of the interval before a device is considered down.
 DEFAULT_GRACE_SECONDS = "600"
+# Slack channels (only used when the SLACK_BOT_TOKEN secret is set). Alerts are
+# routed by kind: wins → SUCCESS, config changes → INFO, the rest → FAILURE.
+SLACK_SUCCESS_CHANNEL = ""
+SLACK_FAILURE_CHANNEL = ""
+SLACK_INFO_CHANNEL = ""
 
 [observability]
 enabled = true
@@ -49,6 +55,11 @@ crons = ["* * * * *"]
 [env.prod.vars]
 DEFAULT_HEARTBEAT_INTERVAL_SECONDS = "3600"
 DEFAULT_GRACE_SECONDS = "600"
+# magmamoose Slack: #mikrotik-minder (wins) / #engineering-alerts (failures) /
+# #engineering-info (config changes)
+SLACK_SUCCESS_CHANNEL = "C0B5BJDHZTM"
+SLACK_FAILURE_CHANNEL = "C0A9FT7355Z"
+SLACK_INFO_CHANNEL = "C0A9RSQ3G92"
 
 [env.prod.observability]
 enabled = true

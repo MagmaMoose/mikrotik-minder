@@ -197,7 +197,22 @@ A route stores `kind` (`webhook` | `slack` | `discord`), `url`, `events` (option
 - **Discord**: posted as `{username, embeds[]}` for inline display.
 - **Webhook**: the raw alert envelope (`{id, severity, kind, title, agent_id, device_id, job_id, payload, created_at}`) for routing into your own pipeline.
 
-Every delivery attempt is recorded in `alert_deliveries` with the HTTP status and any error.
+Every delivery attempt to a DB-configured route is recorded in `alert_deliveries` with the HTTP status and any error. Slack bot deliveries (see below) are logged but not written to `alert_deliveries`.
+
+## Slack bot integration
+
+Separate from the DB-configured `slack` route (which uses an Incoming Webhook URL), the worker has a first-class Slack integration driven by environment config. When `SLACK_BOT_TOKEN` is set, **every** alert is also posted to Slack via the `chat.postMessage` Web API as a Block Kit message — in addition to any DB-configured routes.
+
+| Env var                  | Purpose                                                              |
+| ------------------------- | -------------------------------------------------------------------- |
+| `SLACK_BOT_TOKEN`         | Secret. `xoxb-…` bot token with the `chat:write` scope.              |
+| `SLACK_INFO_CHANNEL`      | Channel ID for `info`-severity alerts (good news). Falls back to `SLACK_FAILURE_CHANNEL` if unset. |
+| `SLACK_FAILURE_CHANNEL`   | Channel ID for `warning` / `critical` alerts (needs attention).      |
+| `SLACK_SUCCESS_CHANNEL`   | Channel ID for success/wins class alerts (e.g., `heartbeat_recovered`, `manual`, `backup_succeeded`, `update_applied`). |
+
+Routing is by alert kind: `info`-severity kinds → `SLACK_INFO_CHANNEL` (fallback to `SLACK_FAILURE_CHANNEL`), `warning`/`critical` kinds → `SLACK_FAILURE_CHANNEL`, and success/wins kinds → `SLACK_SUCCESS_CHANNEL`. An unset channel for a class is skipped. The bot must be a member of each channel (or have `chat:write.public`).
+
+With the default alert-kind severities, the info channel receives `heartbeat_recovered` and `manual` test alerts; the failure channel receives `heartbeat_missed`, `job_failed`, `update_failed`, `drift_detected`, and `update_available`; the success channel receives `heartbeat_recovered`, `manual`, `backup_succeeded`, and `update_applied`.
 
 ## Quickstart curls
 

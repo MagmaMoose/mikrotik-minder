@@ -39,6 +39,23 @@ const SEVERITY_COLOR_DISCORD: Record<Severity, number> = {
   critical: 0xd72631,
 };
 
+// Which Slack channel an alert lands in, chosen by kind (not severity):
+//   success → SLACK_SUCCESS_CHANNEL  (#mikrotik-minder)   — good news / wins
+//   info    → SLACK_INFO_CHANNEL     (#engineering-info)  — config changes
+//   failure → SLACK_FAILURE_CHANNEL  (#engineering-alerts) — needs attention
+const SLACK_CHANNEL_CLASS: Record<AlertKind, "success" | "info" | "failure"> = {
+  heartbeat_recovered: "success",
+  backup_succeeded: "success",
+  update_applied: "success",
+  manual: "success",
+  drift_detected: "info",
+  heartbeat_missed: "failure",
+  job_failed: "failure",
+  update_available: "failure",
+  update_failed: "failure",
+  restore_due: "failure",
+};
+
 export async function fireAlert(
   env: Env,
   input: AlertInput,
@@ -72,8 +89,51 @@ export async function fireAlert(
 
 export async function deliverAlert(env: Env, alert: StoredAlert): Promise<void> {
   const routes = await pickRoutes(env, alert);
-  if (routes.length === 0) return;
-  await Promise.all(routes.map((r) => deliverToRoute(env, alert, r)));
+  const work: Promise<unknown>[] = routes.map((r) => deliverToRoute(env, alert, r));
+  // The env-configured Slack bot integration fires for every alert, alongside
+  // any DB-configured webhook/discord routes.
+  if (env.SLACK_BOT_TOKEN) {
+    work.push(deliverToSlackBot(env, alert));
+  }
+  if (work.length === 0) return;
+  await Promise.all(work);
+}
+
+/**
+ * Post an alert to Slack via chat.postMessage using a bot token.
+ *
+ * The channel is chosen by alert kind (see SLACK_CHANNEL_CLASS): wins →
+ * SUCCESS, config changes → INFO, everything else → FAILURE. INFO falls back
+ * to FAILURE when SLACK_INFO_CHANNEL is unset; an unset target channel is
+ * simply skipped.
+ */
+async function deliverToSlackBot(env: Env, alert: StoredAlert): Promise<void> {
+  const cls = SLACK_CHANNEL_CLASS[alert.kind];
+  const channel =
+    cls === "success"
+      ? env.SLACK_SUCCESS_CHANNEL
+      : cls === "info"
+        ? env.SLACK_INFO_CHANNEL || env.SLACK_FAILURE_CHANNEL
+        : env.SLACK_FAILURE_CHANNEL;
+  if (!channel) return; // no channel configured for this class
+
+  try {
+    const res = await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.SLACK_BOT_TOKEN}`,
+        "content-type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(slackBotMessage(alert, channel)),
+    });
+    // Slack returns HTTP 200 even for logical failures; the body carries `ok`.
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || !data.ok) {
+      console.error("slack chat.postMessage failed", res.status, data.error ?? "(no body)");
+    }
+  } catch (err) {
+    console.error("slack chat.postMessage threw", err instanceof Error ? err.message : err);
+  }
 }
 
 async function pickRoutes(env: Env, alert: StoredAlert): Promise<RouteRow[]> {
@@ -178,6 +238,53 @@ function genericBody(alert: StoredAlert) {
     job_id: alert.job_id ?? null,
     payload: alert.payload,
     created_at: alert.created_at,
+  };
+}
+
+const SEVERITY_EMOJI: Record<Severity, string> = {
+  info: ":white_check_mark:",
+  warning: ":warning:",
+  critical: ":rotating_light:",
+};
+
+/** Block Kit message for the Slack Web API `chat.postMessage`. */
+function slackBotMessage(alert: StoredAlert, channel: string) {
+  const detailLines = renderFields(alert)
+    .map((f) => `*${f.title}:* ${f.value}`)
+    .join("\n");
+  return {
+    channel,
+    // `text` is the notification fallback (lockscreen / a11y).
+    text: `${alert.severity.toUpperCase()} · ${alert.title}`,
+    blocks: [
+      {
+        type: "header",
+        text: {
+          type: "plain_text",
+          text: `${SEVERITY_EMOJI[alert.severity]} ${alert.title}`.slice(0, 150),
+          emoji: true,
+        },
+      },
+      {
+        type: "section",
+        fields: [
+          { type: "mrkdwn", text: `*Severity:*\n${alert.severity}` },
+          { type: "mrkdwn", text: `*Kind:*\n${alert.kind}` },
+        ],
+      },
+      ...(detailLines
+        ? [{ type: "section", text: { type: "mrkdwn", text: detailLines.slice(0, 2900) } }]
+        : []),
+      {
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `mikrotik-minder · alert \`${alert.id}\` · <!date^${alert.created_at}^{date_short_pretty} {time}|just now>`,
+          },
+        ],
+      },
+    ],
   };
 }
 
