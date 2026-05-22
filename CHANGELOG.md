@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.2.1 (2026-05-22)
+
+### Bug Fixes
+
+- **chart**: Keep the git deploy key's trailing newline
+  ([`073f16e`](https://github.com/MagmaMoose/mikrotik-minder/commit/073f16ef11e2ee3b84418501596f582976734f86))
+
+
 ## v1.2.0 (2026-05-21)
 
 ### Bug Fixes
