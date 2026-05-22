@@ -157,15 +157,55 @@ class Daemon:
             for cmd in commands:
                 if self._stop.is_set():
                     break
-                execute_command(
-                    cmd,
-                    self._config,
-                    minder=minder,
-                    exporter=self._exporter,
-                    backup_runner=self._backup_runner,
-                )
+                # Route through daemon helpers so device timestamps are updated
+                # and duplicate interval-driven work is avoided.
+                self._execute_command_via_daemon(cmd, minder)
             if self._stop.wait(timeout=interval):
                 break
+
+    def _execute_command_via_daemon(self, cmd: dict, minder: MinderClient) -> None:
+        """Execute a command and update the relevant device state timestamps."""
+        # Determine the device name from the command payload.
+        device_name = cmd.get("device_name")
+        if not device_name:
+            log.warning("command missing device_name, skipping timestamp update")
+            execute_command(
+                cmd,
+                self._config,
+                minder=minder,
+                exporter=self._exporter,
+                backup_runner=self._backup_runner,
+            )
+            return
+
+        # Find the device config.
+        device = next((d for d in self._config.devices if d.name == device_name), None)
+        if device is None:
+            log.warning("command for unknown device %s, skipping timestamp update", device_name)
+            execute_command(
+                cmd,
+                self._config,
+                minder=minder,
+                exporter=self._exporter,
+                backup_runner=self._backup_runner,
+            )
+            return
+
+        # Determine the command kind.
+        command_kind = cmd.get("command", "")
+        if command_kind in ("export", "sensitive_export"):
+            self._run_export(device, minder)
+        elif command_kind == "backup":
+            self._run_backup(device, minder)
+        else:
+            # For other commands (e.g., update_apply), just execute directly.
+            execute_command(
+                cmd,
+                self._config,
+                minder=minder,
+                exporter=self._exporter,
+                backup_runner=self._backup_runner,
+            )
 
     def _tick(self, device: DeviceConfig, minder: MinderClient) -> bool:
         started = int(time.time())
