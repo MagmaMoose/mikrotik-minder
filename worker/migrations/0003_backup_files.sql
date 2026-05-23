@@ -21,4 +21,4 @@ CREATE INDEX backup_files_device_idx ON backup_files(device_id, created_at DESC)
 
 -- An agent's retention sweep deletes its local + control-plane catalog rows;
 -- supports `WHERE agent_id = ? AND device_id = ? ORDER BY created_at`.
-CREATE INDEX backup_files_agent_idx ON backup_files(agent_id, created_at DESC);
+CREATE INDEX backup_files_agent_idx ON backup_files(agent_id, device_id, created_at DESC);
