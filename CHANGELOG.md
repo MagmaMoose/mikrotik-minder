@@ -2,6 +2,135 @@
 
 <!-- version list -->
 
+## v1.4.0 (2026-05-23)
+
+### Bug Fixes
+
+- **admin**: Add anti-caching headers to artifact download endpoint
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **admin**: Derive requested_by from authenticated user instead of request body
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **admin**: Make artifact download atomic with UPDATE ... RETURNING
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **admin**: Populate requested_by from X-Auth-Email header
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **admin**: Return pre-update artifact in one-shot download endpoint
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **admin**: Validate X-Auth-Email header for commands endpoint
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **agent**: Align sensitive export docstring with CRLF normalization
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **agent**: Enforce artifact size limit in sensitive export command
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **agent**: Report command results for export/backup commands
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **agent**: Satisfy ruff (unused noqa + line length)
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **agent**: Wrap E501 in sensitive export size-limit message
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **agent**: Wrap long MinderError lines added by status_code refactor
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **daemon**: Accept CommandRef in _execute_command_via_daemon
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **daemon**: Update device timestamps after command execution
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **ingest**: Fix invalid SQL in command claim query
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **ingest**: Preserve artifact payload verbatim without trimming
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **worker**: Guard JSON.parse of command params in poll endpoint
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **worker**: Null-check artifact before returning the download body
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **worker**: Reject arrays in command result validation
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **worker**: Restore SLACK_INFO_CHANNEL dropped in the #13 merge
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **worker**: Return 202 for pending/claimed commands on artifact endpoint
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+### Chores
+
+- **chart**: Mikrotik-minder-agent 0.1.3 (appVersion 0.0.2)
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+### Features
+
+- **agent**: Poll for operator-triggered commands and execute them
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **worker**: Command-dispatch endpoints + commands table
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **worker**: Command-dispatch foundation (commands table + endpoints)
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+### Performance Improvements
+
+- **ingest**: Eliminate N+1 query in GET /commands by joining device name
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **worker**: Add composite index for command claim query
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+### Refactoring
+
+- **db**: Remove redundant commands_agent_idx index
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+- **minder**: Include HTTP status code in MinderError for robust 404 handling
+  ([#15](https://github.com/MagmaMoose/mikrotik-minder/pull/15),
+  [`6b0c86d`](https://github.com/MagmaMoose/mikrotik-minder/commit/6b0c86d60a87fac92c827b78893f0e58e1b28f48))
+
+
 ## v1.3.0 (2026-05-22)
 
 ### Bug Fixes
