@@ -265,7 +265,10 @@ def _run_sensitive_export(
             cmd.id,
             "failed",
             result={
-                "error": f"sensitive export too large ({len(text)} chars, max {_MAX_ARTIFACT_CHARS})",
+                "error": (
+                    f"sensitive export too large "
+                    f"({len(text)} chars, max {_MAX_ARTIFACT_CHARS})"
+                ),
                 "bytes": len(text),
             },
         )
