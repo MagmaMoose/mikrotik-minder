@@ -333,7 +333,7 @@ function validateArtifact(value: unknown): { ok: true; value: string | null } | 
 //   - sha256 sent as a query string + matched against R2's MD5 we cannot
 //     reproduce, so we re-hash on the worker and reject mismatches (catches
 //     corruption-in-flight without trusting the client header)
-//   - `device` must match an agent-owned device; otherwise 403
+//   - `device` must match an agent-owned device; otherwise 404
 //   - `file_name` must look like a backup filename (no slashes, .backup suffix)
 //   - duplicate file_name for the same device → idempotent (200 + existing id)
 
