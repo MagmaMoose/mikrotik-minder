@@ -194,28 +194,29 @@ class Daemon:
         # Determine the command kind.
         command_kind = cmd.kind
         if command_kind in ("export", "sensitive_export"):
-            # Use execute_command to ensure reporting, then update timestamp
-            execute_command(
+            success = execute_command(
                 cmd,
                 self._config,
                 minder=minder,
                 exporter=self._exporter,
                 backup_runner=self._backup_runner,
             )
-            state = self._state[device.name]
-            with state.lock:
-                state.last_export = time.time()
+            if success:
+                state = self._state[device.name]
+                with state.lock:
+                    state.last_export = time.time()
         elif command_kind == "backup":
-            execute_command(
+            success = execute_command(
                 cmd,
                 self._config,
                 minder=minder,
                 exporter=self._exporter,
                 backup_runner=self._backup_runner,
             )
-            state = self._state[device.name]
-            with state.lock:
-                state.last_backup = time.time()
+            if success:
+                state = self._state[device.name]
+                with state.lock:
+                    state.last_backup = time.time()
         else:
             # For other commands (e.g., update_apply), just execute directly.
             execute_command(
@@ -545,7 +546,10 @@ class Daemon:
         assert self._backup_runner is not None
         started = int(time.time())
         try:
-            result: BackupResult = self._backup_runner.run(device)
+            # Pass the MinderClient as uploader so the encrypted body lands in
+            # R2 + the worker's catalog as part of the same run. Upload errors
+            # are non-fatal and reported in BackupResult.upload_error.
+            result: BackupResult = self._backup_runner.run(device, uploader=minder)
         except BackupError as exc:
             log.warning("device %s backup failed: %s", device.name, exc)
             self._send_failure_job(device, minder, "backup", started, str(exc))
@@ -562,6 +566,9 @@ class Daemon:
             "sha256": result.sha256,
             "retained": result.retained,
             "pruned": result.pruned,
+            "uploaded_id": result.uploaded_id,
+            "upload_skipped": result.upload_skipped,
+            "upload_error": result.upload_error,
         }
         try:
             minder.send_job(

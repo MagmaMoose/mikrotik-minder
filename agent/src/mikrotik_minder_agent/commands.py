@@ -43,23 +43,28 @@ def execute_command(
     minder: MinderClient,
     exporter: ExportRunner | None,
     backup_runner: BackupRunner | None,
-) -> None:
-    """Dispatch one command end-to-end (run + report). Never raises."""
+) -> bool:
+    """Dispatch one command end-to-end (run + report). Never raises.
+
+    Returns True only when the underlying work succeeded; callers use this to
+    gate side effects like advancing per-device interval timestamps so a failed
+    operator-triggered run doesn't suppress the next scheduled one.
+    """
     device = _device_by_name(config, cmd.device)
     if device is None:
         _report(minder, cmd.id, "failed", result={"error": f"unknown device {cmd.device!r}"})
-        return
+        return False
 
     log.info("command %s: %s on %s", cmd.id, cmd.kind, device.name)
     try:
         if cmd.kind == "backup":
-            _run_backup(cmd, device, minder, backup_runner)
+            return _run_backup(cmd, device, minder, backup_runner)
         elif cmd.kind == "export":
-            _run_export(cmd, device, minder, exporter)
+            return _run_export(cmd, device, minder, exporter)
         elif cmd.kind == "update_apply":
-            _run_update_apply(cmd, device, config, minder)
+            return _run_update_apply(cmd, device, config, minder)
         elif cmd.kind == "sensitive_export":
-            _run_sensitive_export(cmd, device, config, minder)
+            return _run_sensitive_export(cmd, device, config, minder)
         else:
             _report(
                 minder,
@@ -67,9 +72,11 @@ def execute_command(
                 "failed",
                 result={"error": f"unknown command kind {cmd.kind!r}"},
             )
+            return False
     except Exception as exc:  # never let one bad command kill the whole poller
         log.exception("command %s dispatcher error", cmd.id)
         _report(minder, cmd.id, "failed", result={"error": f"dispatcher error: {exc}"})
+        return False
 
 
 # --- per-kind executors ----------------------------------------------------
@@ -80,17 +87,17 @@ def _run_backup(
     device: DeviceConfig,
     minder: MinderClient,
     runner: BackupRunner | None,
-) -> None:
+) -> bool:
     if runner is None:
         _report(minder, cmd.id, "failed", result={"error": "backup pipeline not configured"})
-        return
+        return False
     started = int(time.time())
     try:
-        res = runner.run(device)
+        res = runner.run(device, uploader=minder)
     except BackupError as exc:
         _report(minder, cmd.id, "failed", result={"error": str(exc)})
         _send_failure_job(minder, device, "backup", started, str(exc))
-        return
+        return False
 
     details: dict[str, Any] = {
         "file_name": res.file_name,
@@ -99,6 +106,9 @@ def _run_backup(
         "sha256": res.sha256,
         "retained": res.retained,
         "pruned": res.pruned,
+        "uploaded_id": res.uploaded_id,
+        "upload_skipped": res.upload_skipped,
+        "upload_error": res.upload_error,
     }
     summary = backup_summary(res)
     _send_job(
@@ -106,6 +116,7 @@ def _run_backup(
         res.started_at, res.finished_at, summary, details,
     )
     _report(minder, cmd.id, "succeeded", result={"summary": summary, **details})
+    return True
 
 
 def _run_export(
@@ -113,17 +124,17 @@ def _run_export(
     device: DeviceConfig,
     minder: MinderClient,
     runner: ExportRunner | None,
-) -> None:
+) -> bool:
     if runner is None:
         _report(minder, cmd.id, "failed", result={"error": "export pipeline not configured"})
-        return
+        return False
     started = int(time.time())
     try:
         res = runner.run(device)
     except ExportError as exc:
         _report(minder, cmd.id, "failed", result={"error": str(exc)})
         _send_failure_job(minder, device, "export", started, str(exc))
-        return
+        return False
 
     push_failed = res.push_error is not None
     if push_failed:
@@ -159,6 +170,7 @@ def _run_export(
         "failed" if push_failed else "succeeded",
         result={"summary": summary, **details},
     )
+    return not push_failed
 
 
 def _run_update_apply(
@@ -166,11 +178,10 @@ def _run_update_apply(
     device: DeviceConfig,
     config: AgentConfig,
     minder: MinderClient,
-) -> None:
+) -> bool:
     mode = str(cmd.params.get("mode") or "now").strip().lower()
     if mode == "download_only":
-        _run_update_download_only(cmd, device, config, minder)
-        return
+        return _run_update_download_only(cmd, device, config, minder)
     # default → mode "now": full install + reboot.
     started = int(time.time())
     try:
@@ -191,11 +202,11 @@ def _run_update_apply(
             result={"error": str(exc), "aborted_pre_install": True},
         )
         _send_failure_job(minder, device, "update_apply", started, f"aborted: {exc}")
-        return
+        return False
     except (ApplyTimedOut, ApplyError) as exc:
         _report(minder, cmd.id, "failed", result={"error": str(exc)})
         _send_failure_job(minder, device, "update_apply", started, str(exc))
-        return
+        return False
 
     summary = apply_summary(res)
     details: dict[str, Any] = {
@@ -211,6 +222,7 @@ def _run_update_apply(
         res.started_at, res.finished_at, summary, details,
     )
     _report(minder, cmd.id, "succeeded", result={"summary": summary, **details})
+    return True
 
 
 def _run_update_download_only(
@@ -218,7 +230,7 @@ def _run_update_download_only(
     device: DeviceConfig,
     config: AgentConfig,
     minder: MinderClient,
-) -> None:
+) -> bool:
     """Download the available update package but don't install/reboot."""
     ssh = SSHTransport(device, config.defaults)
     try:
@@ -228,13 +240,14 @@ def _run_update_download_only(
         )
     except TransportError as exc:
         _report(minder, cmd.id, "failed", result={"error": f"download failed: {exc}"})
-        return
+        return False
     _report(
         minder,
         cmd.id,
         "succeeded",
         result={"mode": "download_only", "output": (out or "").strip()[:500]},
     )
+    return True
 
 
 def _run_sensitive_export(
@@ -242,7 +255,7 @@ def _run_sensitive_export(
     device: DeviceConfig,
     config: AgentConfig,
     minder: MinderClient,
-) -> None:
+) -> bool:
     """Capture ``/export show-sensitive`` and return the text as a one-shot artifact.
 
     Unlike the regular export pipeline, the body is NOT committed to git, NOT
@@ -257,7 +270,7 @@ def _run_sensitive_export(
         )
     except TransportError as exc:
         _report(minder, cmd.id, "failed", result={"error": f"capture failed: {exc}"})
-        return
+        return False
     text = text.replace("\r\n", "\n")
     if len(text) > _MAX_ARTIFACT_CHARS:
         _report(
@@ -272,8 +285,9 @@ def _run_sensitive_export(
                 "bytes": len(text),
             },
         )
-        return
+        return False
     _report(minder, cmd.id, "succeeded", result={"bytes": len(text)}, artifact=text)
+    return True
 
 
 # --- helpers ---------------------------------------------------------------
