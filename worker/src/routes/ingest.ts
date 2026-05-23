@@ -269,6 +269,27 @@ ingest.post("/commands/:id/result", async (c) => {
   const artifact = validateArtifact(body?.artifact);
   if (!artifact.ok) return c.json({ error: artifact.error }, 400);
 
+  // Artifacts only make sense for `sensitive_export`. Reject early when the
+  // agent tries to attach a body to any other kind so we never accidentally
+  // persist large/sensitive blobs against e.g. a backup command. The cost is
+  // one extra read on the result-report path, which isn't hot.
+  if (artifact.value !== null) {
+    const cmd = await c.env.DB.prepare(
+      "SELECT kind FROM commands WHERE id = ?1 AND agent_id = ?2 AND status = 'claimed'",
+    )
+      .bind(id, agentId)
+      .first<{ kind: string }>();
+    if (!cmd) {
+      return c.json({ error: "command not found, not yours, or not in 'claimed' state" }, 404);
+    }
+    if (cmd.kind !== "sensitive_export") {
+      return c.json(
+        { error: `artifact only allowed for sensitive_export, not ${cmd.kind}` },
+        400,
+      );
+    }
+  }
+
   const res = await c.env.DB.prepare(
     `UPDATE commands SET status = ?1, result = ?2, artifact = ?3, finished_at = ?4
      WHERE id = ?5 AND agent_id = ?6 AND status = 'claimed'`,
