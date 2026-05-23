@@ -206,16 +206,17 @@ class Daemon:
             with state.lock:
                 state.last_export = time.time()
         elif command_kind == "backup":
-            execute_command(
+            success = execute_command(
                 cmd,
                 self._config,
                 minder=minder,
                 exporter=self._exporter,
                 backup_runner=self._backup_runner,
             )
-            state = self._state[device.name]
-            with state.lock:
-                state.last_backup = time.time()
+            if success:
+                state = self._state[device.name]
+                with state.lock:
+                    state.last_backup = time.time()
         else:
             # For other commands (e.g., update_apply), just execute directly.
             execute_command(
