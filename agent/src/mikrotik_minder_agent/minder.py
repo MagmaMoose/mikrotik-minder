@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -157,20 +158,19 @@ class MinderClient:
         caller treat the upload as optional.
         """
         name = file_path.name
-        path = f"/v1/ingest/backups/{device}/{name}"
+        path = f"/v1/ingest/backups/{quote(device, safe='')}/{quote(name, safe='')}"
         if sha256:
             path += f"?sha256={sha256}"
-        with file_path.open("rb") as f:
-            body = f.read()
         last_exc: Exception | None = None
         for attempt in (1, 2):
             try:
-                resp = self._client.put(
-                    path,
-                    content=body,
-                    headers={"content-type": "application/octet-stream"},
-                    timeout=self._server.timeout_seconds * 6,
-                )
+                with file_path.open("rb") as f:
+                    resp = self._client.put(
+                        path,
+                        content=f,
+                        headers={"content-type": "application/octet-stream"},
+                        timeout=self._server.timeout_seconds * 6,
+                    )
             except httpx.HTTPError as exc:
                 last_exc = exc
                 if attempt == 1:
