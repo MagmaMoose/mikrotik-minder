@@ -10,6 +10,7 @@ import {
   asOptionalString,
   asString,
   asStringArray,
+  COMMAND_KINDS,
   ROUTE_KINDS,
   SEVERITIES,
   type AlertKind,
@@ -228,6 +229,86 @@ admin.post("/alerts/test", async (c) => {
     c.executionCtx,
   );
   return c.json({ ok: true, alert_id: alertId });
+});
+
+// --- Commands -------------------------------------------------------------
+// The Pro UI enqueues operator-triggered actions here; the agent claims them
+// via GET /v1/ingest/commands and reports back via POST .../result.
+
+admin.post("/commands", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const deviceId = asString(body?.device_id, "device_id", { max: 100 });
+  if (!deviceId.ok) return c.json({ error: deviceId.error }, 400);
+  const kind = asEnum(body?.kind, "kind", COMMAND_KINDS);
+  if (!kind.ok) return c.json({ error: kind.error }, 400);
+  const scheduledFor = asOptionalInt(body?.scheduled_for, "scheduled_for", { min: 0 });
+  if (!scheduledFor.ok) return c.json({ error: scheduledFor.error }, 400);
+  // Derive requested_by from the X-Auth-Email header (set by Cloudflare Access)
+  const rawEmail = c.req.header("X-Auth-Email") ?? "";
+  const trimmed = rawEmail.trim();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const requestedBy = trimmed.length > 0 && trimmed.length <= 254 && emailRegex.test(trimmed) ? trimmed : "unknown";
+  const params = body?.params;
+  if (
+    params !== undefined &&
+    (typeof params !== "object" || params === null || Array.isArray(params))
+  ) {
+    return c.json({ error: "params must be an object" }, 400);
+  }
+
+  const dev = await c.env.DB.prepare("SELECT id, agent_id FROM devices WHERE id = ?1")
+    .bind(deviceId.value)
+    .first<{ id: string; agent_id: string }>();
+  if (!dev) return c.json({ error: "device not found" }, 404);
+
+  const id = newId("cmd");
+  await c.env.DB.prepare(
+    `INSERT INTO commands
+       (id, device_id, agent_id, kind, params, status, scheduled_for, requested_by, created_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?7, ?8)`,
+  )
+    .bind(
+      id,
+      dev.id,
+      dev.agent_id,
+      kind.value,
+      params !== undefined ? JSON.stringify(params) : null,
+      scheduledFor.value ?? null,
+      requestedBy,
+      nowSeconds(),
+    )
+    .run();
+  return c.json({ id, status: "pending" }, 201);
+});
+
+// One-shot download of a sensitive-export artifact. Purged on read — the
+// secret-bearing /export body is delivered exactly once and never re-served.
+admin.get("/commands/:id/artifact", async (c) => {
+  const id = c.req.param("id");
+  const row = await c.env.DB.prepare(
+    `WITH old AS (
+       SELECT artifact FROM commands WHERE id = ?1 AND artifact IS NOT NULL
+     )
+     UPDATE commands SET artifact = NULL
+     WHERE id = ?1 AND artifact IS NOT NULL
+     RETURNING (SELECT artifact FROM old) AS artifact`
+  )
+    .bind(id)
+    .first<{ artifact: string | null }>();
+  if (!row || row.artifact === null) {
+    // Either the row doesn't exist, or artifact was already NULL (already downloaded)
+    const cmd = await c.env.DB.prepare("SELECT id, status FROM commands WHERE id = ?1").bind(id).first<{ id: string; status: string }>();
+    if (!cmd) return c.json({ error: "not found" }, 404);
+    if (cmd.status === "pending" || cmd.status === "claimed") {
+      return c.json({ error: "command not yet ready" }, 202);
+    }
+    return c.json({ error: "no artifact — already downloaded, or none produced" }, 410);
+  }
+  return c.text(row.artifact, 200, {
+    "content-type": "text/plain; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+  });
 });
 
 export default admin;

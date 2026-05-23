@@ -16,6 +16,10 @@ log = logging.getLogger(__name__)
 class MinderError(RuntimeError):
     """Raised when the control plane returns an error or is unreachable."""
 
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
 
 @dataclass
 class JobReport:
@@ -26,6 +30,16 @@ class JobReport:
     finished_at: int
     summary: str | None = None
     details: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class CommandRef:
+    """One pending command claimed from GET /v1/ingest/commands."""
+
+    id: str
+    device: str | None
+    kind: str            # 'backup' | 'export' | 'update_apply' | 'sensitive_export'
+    params: dict[str, Any]
 
 
 class MinderClient:
@@ -82,6 +96,50 @@ class MinderClient:
         data = self._post_json("/v1/ingest/jobs", body)
         return str(data.get("job_id", ""))
 
+    def get_commands(self) -> list[CommandRef]:
+        """Claim queued commands for this agent. Empty list = nothing to do.
+
+        Old workers without the command-dispatch endpoint return 404 — treated
+        as "nothing to do" so the agent stays compatible across worker versions.
+        """
+        try:
+            data = self._get_json("/v1/ingest/commands")
+        except MinderError as exc:
+            if exc.status_code == 404:
+                return []
+            raise
+        items = data.get("commands") or []
+        out: list[CommandRef] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            params = item.get("params")
+            out.append(
+                CommandRef(
+                    id=str(item.get("id") or ""),
+                    device=item.get("device") if isinstance(item.get("device"), str) else None,
+                    kind=str(item.get("kind") or ""),
+                    params=params if isinstance(params, dict) else {},
+                ),
+            )
+        return out
+
+    def report_command_result(
+        self,
+        cmd_id: str,
+        status: str,
+        *,
+        result: dict[str, Any] | None = None,
+        artifact: str | None = None,
+    ) -> None:
+        """Report a claimed command's outcome (succeeded / failed)."""
+        body: dict[str, Any] = {"status": status}
+        if result is not None:
+            body["result"] = result
+        if artifact is not None:
+            body["artifact"] = artifact
+        self._post_json(f"/v1/ingest/commands/{cmd_id}/result", body)
+
     # --- Internals ---
 
     def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -102,7 +160,10 @@ class MinderClient:
 
             if resp.status_code >= 400:
                 detail = _safe_error(resp)
-                raise MinderError(f"minder {path} returned HTTP {resp.status_code}: {detail}")
+                raise MinderError(
+                    f"minder {path} returned HTTP {resp.status_code}: {detail}",
+                    status_code=resp.status_code,
+                )
 
             try:
                 return resp.json()
@@ -111,6 +172,36 @@ class MinderClient:
 
         # Unreachable, but mypy/runtime safety.
         raise MinderError(f"minder {path} failed: {last_exc}")
+
+    def _get_json(self, path: str) -> dict[str, Any]:
+        last_exc: Exception | None = None
+        for attempt in (1, 2):
+            try:
+                resp = self._client.get(path)
+            except httpx.HTTPError as exc:
+                last_exc = exc
+                if attempt == 1:
+                    log.warning("minder GET %s transport error, retrying once: %s", path, exc)
+                    continue
+                raise MinderError(f"transport error talking to minder: {exc}") from exc
+
+            if 500 <= resp.status_code < 600 and attempt == 1:
+                log.warning("minder GET %s -> %s, retrying once", path, resp.status_code)
+                continue
+
+            if resp.status_code >= 400:
+                detail = _safe_error(resp)
+                raise MinderError(
+                    f"minder GET {path} returned HTTP {resp.status_code}: {detail}",
+                    status_code=resp.status_code,
+                )
+
+            try:
+                return resp.json()
+            except ValueError as exc:
+                raise MinderError(f"minder GET {path} returned non-JSON body") from exc
+
+        raise MinderError(f"minder GET {path} failed: {last_exc}")
 
 
 def _safe_error(resp: httpx.Response) -> str:

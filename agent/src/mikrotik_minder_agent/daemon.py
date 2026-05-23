@@ -14,6 +14,7 @@ import time
 from dataclasses import dataclass, field
 
 from .backup import BackupError, BackupResult, BackupRunner, backup_summary
+from .commands import execute_command
 from .config import (
     AgentConfig,
     DeviceConfig,
@@ -23,7 +24,7 @@ from .config import (
     update_check_interval,
 )
 from .export import ExportError, ExportResult, ExportRunner
-from .minder import JobReport, MinderClient, MinderError
+from .minder import CommandRef, JobReport, MinderClient, MinderError
 from .transports import ProbeResult, TransportError, build_transports
 from .updates import (
     UpdateCheckError,
@@ -81,9 +82,22 @@ class Daemon:
                 )
                 for d in self._config.devices
             ]
+            # One extra thread polls the control plane for operator-triggered
+            # commands (manual backup/export, update_apply, sensitive_export).
+            threads.append(
+                threading.Thread(
+                    target=self._command_loop,
+                    args=(minder,),
+                    name="commands",
+                    daemon=True,
+                ),
+            )
             for t in threads:
                 t.start()
-            log.info("agent running with %d device(s); ctrl-c to stop", len(threads))
+            log.info(
+                "agent running with %d device(s) + command poller; ctrl-c to stop",
+                len(self._config.devices),
+            )
             try:
                 while not self._stop.is_set():
                     self._stop.wait(timeout=1.0)
@@ -94,12 +108,25 @@ class Daemon:
                     t.join(timeout=5.0)
 
     def run_once(self) -> int:
-        """One pass over all devices, sequentially. Returns the count of failed probes."""
+        """One pass over devices + one command-poll. Returns the count of failed probes."""
         failures = 0
         with MinderClient(self._config.server) as minder:
             for d in self._config.devices:
                 if not self._tick(d, minder):
                     failures += 1
+            try:
+                commands = minder.get_commands()
+            except MinderError as exc:
+                log.warning("command poll failed: %s", exc)
+                commands = []
+            for cmd in commands:
+                execute_command(
+                    cmd,
+                    self._config,
+                    minder=minder,
+                    exporter=self._exporter,
+                    backup_runner=self._backup_runner,
+                )
         return failures
 
     # --- Per-device loop ---
@@ -111,6 +138,93 @@ class Daemon:
             self._tick(device, minder)
             if self._stop.wait(timeout=interval):
                 break
+
+    def _command_loop(self, minder: MinderClient) -> None:
+        """Poll the control plane for queued commands and dispatch them.
+
+        One thread for the whole agent — commands are agent-wide, not per-device.
+        A failed poll is logged and the loop continues at the next interval; a
+        stuck command stays visible to operators until the next successful poll.
+        """
+        interval = 30  # seconds; click-to-execute latency upper bound
+        log.info("command poller: every %ds", interval)
+        while not self._stop.is_set():
+            try:
+                commands = minder.get_commands()
+            except MinderError as exc:
+                log.warning("command poll failed: %s", exc)
+                commands = []
+            for cmd in commands:
+                if self._stop.is_set():
+                    break
+                # Route through daemon helpers so device timestamps are updated
+                # and duplicate interval-driven work is avoided.
+                self._execute_command_via_daemon(cmd, minder)
+            if self._stop.wait(timeout=interval):
+                break
+
+    def _execute_command_via_daemon(self, cmd: CommandRef, minder: MinderClient) -> None:
+        """Execute a command and update the relevant device state timestamps."""
+        # Determine the device name from the command payload.
+        device_name = cmd.device
+        if not device_name:
+            log.warning("command missing device, skipping timestamp update")
+            execute_command(
+                cmd,
+                self._config,
+                minder=minder,
+                exporter=self._exporter,
+                backup_runner=self._backup_runner,
+            )
+            return
+
+        # Find the device config.
+        device = next((d for d in self._config.devices if d.name == device_name), None)
+        if device is None:
+            log.warning("command for unknown device %s, skipping timestamp update", device_name)
+            execute_command(
+                cmd,
+                self._config,
+                minder=minder,
+                exporter=self._exporter,
+                backup_runner=self._backup_runner,
+            )
+            return
+
+        # Determine the command kind.
+        command_kind = cmd.kind
+        if command_kind in ("export", "sensitive_export"):
+            # Use execute_command to ensure reporting, then update timestamp
+            execute_command(
+                cmd,
+                self._config,
+                minder=minder,
+                exporter=self._exporter,
+                backup_runner=self._backup_runner,
+            )
+            state = self._state[device.name]
+            with state.lock:
+                state.last_export = time.time()
+        elif command_kind == "backup":
+            execute_command(
+                cmd,
+                self._config,
+                minder=minder,
+                exporter=self._exporter,
+                backup_runner=self._backup_runner,
+            )
+            state = self._state[device.name]
+            with state.lock:
+                state.last_backup = time.time()
+        else:
+            # For other commands (e.g., update_apply), just execute directly.
+            execute_command(
+                cmd,
+                self._config,
+                minder=minder,
+                exporter=self._exporter,
+                backup_runner=self._backup_runner,
+            )
 
     def _tick(self, device: DeviceConfig, minder: MinderClient) -> bool:
         started = int(time.time())

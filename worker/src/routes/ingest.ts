@@ -213,4 +213,113 @@ ingest.post("/jobs", async (c) => {
   return c.json({ ok: true, job_id: id }, 201);
 });
 
+// Agent poll: claim this agent's due, pending commands. The UPDATE...RETURNING
+// flips them to 'claimed' atomically, so a re-poll mid-run never hands the same
+// command out twice.
+ingest.get("/commands", async (c) => {
+  const agentId = c.get("agentId")!;
+  const now = nowSeconds();
+  const { results } = await c.env.DB.prepare(
+    `UPDATE commands SET status = 'claimed', claimed_at = ?1
+     WHERE id IN (
+       SELECT id FROM commands
+       WHERE agent_id = ?2 AND status = 'pending'
+         AND (scheduled_for IS NULL OR scheduled_for <= ?1)
+       ORDER BY created_at LIMIT 20
+     )
+     RETURNING commands.id, commands.device_id, commands.kind, commands.params,
+       (SELECT name FROM devices WHERE id = commands.device_id) AS device_name`,
+  )
+    .bind(now, agentId)
+    .all<{ id: string; device_id: string; kind: string; params: string | null; device_name: string }>();
+
+  const commands = [];
+  for (const r of results) {
+    let params: Record<string, unknown> = {};
+    if (r.params) {
+      try {
+        params = JSON.parse(r.params);
+      } catch {
+        params = {};
+      }
+    }
+    commands.push({
+      id: r.id,
+      device: r.device_name,
+      kind: r.kind,
+      params,
+    });
+  }
+  return c.json({ commands });
+});
+
+// Agent reports a claimed command's outcome. `artifact` carries a one-shot
+// sensitive-export body (downloaded once via GET /v1/admin/commands/:id/artifact).
+ingest.post("/commands/:id/result", async (c) => {
+  const agentId = c.get("agentId")!;
+  const id = c.req.param("id");
+  const body = await c.req.json().catch(() => null);
+  const status = asEnum(body?.status, "status", ["succeeded", "failed"] as const);
+  if (!status.ok) return c.json({ error: status.error }, 400);
+  const result = body?.result;
+  if (result !== undefined && (typeof result !== "object" || result === null || Array.isArray(result))) {
+    return c.json({ error: "result must be an object" }, 400);
+  }
+  // Use a custom validator that preserves the original string verbatim (no trimming)
+  const artifact = validateArtifact(body?.artifact);
+  if (!artifact.ok) return c.json({ error: artifact.error }, 400);
+
+  // Artifacts only make sense for `sensitive_export`. Reject early when the
+  // agent tries to attach a body to any other kind so we never accidentally
+  // persist large/sensitive blobs against e.g. a backup command. The cost is
+  // one extra read on the result-report path, which isn't hot.
+  if (artifact.value !== null) {
+    const cmd = await c.env.DB.prepare(
+      "SELECT kind FROM commands WHERE id = ?1 AND agent_id = ?2 AND status = 'claimed'",
+    )
+      .bind(id, agentId)
+      .first<{ kind: string }>();
+    if (!cmd) {
+      return c.json({ error: "command not found, not yours, or not in 'claimed' state" }, 404);
+    }
+    if (cmd.kind !== "sensitive_export") {
+      return c.json(
+        { error: `artifact only allowed for sensitive_export, not ${cmd.kind}` },
+        400,
+      );
+    }
+  }
+
+  const res = await c.env.DB.prepare(
+    `UPDATE commands SET status = ?1, result = ?2, artifact = ?3, finished_at = ?4
+     WHERE id = ?5 AND agent_id = ?6 AND status = 'claimed'`,
+  )
+    .bind(
+      status.value,
+      result !== undefined ? JSON.stringify(result) : null,
+      artifact.value ?? null,
+      nowSeconds(),
+      id,
+      agentId,
+    )
+    .run();
+  if ((res.meta.changes ?? 0) === 0) {
+    return c.json({ error: "command not found, not yours, or not in 'claimed' state" }, 404);
+  }
+  return c.json({ ok: true });
+});
+
+function validateArtifact(value: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (value === undefined || value === null) {
+    return { ok: true, value: null };
+  }
+  if (typeof value !== "string") {
+    return { ok: false, error: "artifact must be a string" };
+  }
+  if (value.length > 5_000_000) {
+    return { ok: false, error: "artifact must be at most 5,000,000 characters" };
+  }
+  return { ok: true, value };
+}
+
 export default ingest;
