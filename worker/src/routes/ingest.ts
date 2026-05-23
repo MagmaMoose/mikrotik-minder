@@ -411,12 +411,26 @@ ingest.put("/backups/:device/:filename", async (c) => {
   });
 
   const id = newId("bkp");
-  await c.env.DB.prepare(
-    `INSERT INTO backup_files (id, agent_id, device_id, file_name, r2_key, size_bytes, sha256, created_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
-  )
-    .bind(id, agentId, dev.id, fileName, r2Key, buf.byteLength, computedSha, nowSeconds())
-    .run();
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO backup_files (id, agent_id, device_id, file_name, r2_key, size_bytes, sha256, created_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+    )
+      .bind(id, agentId, dev.id, fileName, r2Key, buf.byteLength, computedSha, nowSeconds())
+      .run();
+  } catch (err: any) {
+    // UNIQUE constraint on r2_key (or (device_id, file_name)): another concurrent
+    // upload already inserted this row. Return the existing record idempotently.
+    const existingAfterInsert = await c.env.DB.prepare(
+      "SELECT id FROM backup_files WHERE device_id = ?1 AND file_name = ?2",
+    )
+      .bind(dev.id, fileName)
+      .first<{ id: string }>();
+    if (existingAfterInsert) {
+      return c.json({ id: existingAfterInsert.id, deduped: true });
+    }
+    throw err;
+  }
 
   return c.json(
     { id, r2_key: r2Key, size_bytes: buf.byteLength, sha256: computedSha },
