@@ -74,6 +74,8 @@ export const ALERT_KINDS = [
   "drift_detected",
   "update_available",
   "update_failed",
+  "backup_succeeded",
+  "update_applied",
   "restore_due",
   "manual",
 ] as const;
@@ -84,6 +86,19 @@ export type DeviceStatus = (typeof DEVICE_STATUSES)[number];
 export type RouteKind = (typeof ROUTE_KINDS)[number];
 export type Severity = (typeof SEVERITIES)[number];
 export type AlertKind = (typeof ALERT_KINDS)[number];
+
+// Command dispatch — the operator-triggered actions the agent can be asked to
+// run. `sensitive_export` is an /export WITHOUT hide-sensitive (passwords/keys).
+export const COMMAND_KINDS = ["backup", "export", "update_apply", "sensitive_export"] as const;
+export const COMMAND_STATUSES = [
+  "pending",
+  "claimed",
+  "succeeded",
+  "failed",
+  "expired",
+] as const;
+export type CommandKind = (typeof COMMAND_KINDS)[number];
+export type CommandStatus = (typeof COMMAND_STATUSES)[number];
 
 export function severityRank(s: Severity): number {
   return s === "info" ? 0 : s === "warning" ? 1 : 2;

@@ -2,20 +2,33 @@ name = "mikrotik-minder"
 main = "src/index.ts"
 compatibility_date = "2025-01-09"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+# No account_id here — safe for local dev and self-host.
+# The hosted production account is configured in [env.prod] below.
 
 # Run the dead-man-alert sweep every minute.
 [triggers]
 crons = ["* * * * *"]
 
-# D1 binding. Create the database with `npm run db:create` and paste the id below.
+# D1 binding for local dev / self-host.
+# Self-hosters: run `wrangler d1 create minder` and set your own database_id here.
 [[d1_databases]]
 binding = "DB"
 database_name = "minder"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
 
-# Secrets (set via `wrangler secret put ADMIN_TOKEN`):
-#   ADMIN_TOKEN  - bearer token for /v1/admin/* endpoints. Long random string.
+# R2 bucket for encrypted device backups. The agent PUTs ciphertext bodies
+# (already AES-encrypted by RouterOS); the worker streams them back to the
+# Pro UI on download. Self-hosters: run `wrangler r2 bucket create <name>`
+# and override the bucket_name here.
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "mikrotik-minder-backups"
+
+# Secrets (set via `wrangler secret put <NAME>`):
+#   ADMIN_TOKEN      - bearer token for /v1/admin/* endpoints. Long random string.
+#   SLACK_BOT_TOKEN  - optional. xoxb-… bot token; enables Slack alert delivery.
 #
 # Public-facing vars below are non-secret runtime tuning knobs.
 [vars]
@@ -23,8 +36,52 @@ migrations_dir = "migrations"
 DEFAULT_HEARTBEAT_INTERVAL_SECONDS = "3600"
 # Grace period added on top of the interval before a device is considered down.
 DEFAULT_GRACE_SECONDS = "600"
-# How many jobs/alerts to keep in the dashboard tables.
-DASHBOARD_ROWS = "50"
+# Slack channels (only used when the SLACK_BOT_TOKEN secret is set). Alerts are
+# routed by kind: wins → SUCCESS, config changes → INFO, the rest → FAILURE.
+SLACK_SUCCESS_CHANNEL = ""
+SLACK_FAILURE_CHANNEL = ""
+SLACK_INFO_CHANNEL = ""
+# Public base URL of the Pro UI. Used to build deep links in alerts (Slack
+# "Download" buttons, etc.). Leave empty to suppress link rendering.
+PRO_UI_URL = ""
 
 [observability]
 enabled = true
+
+# ── Hosted production environment ──────────────────────────────────────────────
+# Used by CI only: `wrangler deploy --env prod` / `wrangler d1 migrations apply minder --remote --env prod`.
+# Do NOT run this locally unless you intend to mutate the live worker / database.
+#
+# Wrangler does NOT inherit `name`, `vars`, `triggers`, or `observability` into
+# environments — each has to be repeated here. Without `name`, `--env prod`
+# would deploy to a NEW worker called `mikrotik-minder-prod` (different URL,
+# missing the ADMIN_TOKEN secret bound to the live worker).
+[env.prod]
+name = "mikrotik-minder"
+account_id = "6e26afa31c37dee1dc82ad2f214f9b3c"
+
+[env.prod.triggers]
+crons = ["* * * * *"]
+
+[env.prod.vars]
+DEFAULT_HEARTBEAT_INTERVAL_SECONDS = "3600"
+DEFAULT_GRACE_SECONDS = "600"
+# magmamoose Slack: #mikrotik-minder (wins) / #engineering-alerts (failures) /
+# #engineering-info (config changes)
+SLACK_SUCCESS_CHANNEL = "C0B5BJDHZTM"
+SLACK_FAILURE_CHANNEL = "C0A9FT7355Z"
+SLACK_INFO_CHANNEL = "C0A9RSQ3G92"
+PRO_UI_URL = "https://mikrotik-minder-pro.pages.dev"
+
+[env.prod.observability]
+enabled = true
+
+[[env.prod.d1_databases]]
+binding = "DB"
+database_name = "minder"
+database_id = "03bb68db-e2c1-4069-ad01-e32cce5efb32"
+migrations_dir = "migrations"
+
+[[env.prod.r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "mikrotik-minder-backups"

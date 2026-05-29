@@ -10,6 +10,7 @@ import {
   asOptionalString,
   asString,
   asStringArray,
+  COMMAND_KINDS,
   ROUTE_KINDS,
   SEVERITIES,
   type AlertKind,
@@ -228,6 +229,137 @@ admin.post("/alerts/test", async (c) => {
     c.executionCtx,
   );
   return c.json({ ok: true, alert_id: alertId });
+});
+
+// --- Commands -------------------------------------------------------------
+// The Pro UI enqueues operator-triggered actions here; the agent claims them
+// via GET /v1/ingest/commands and reports back via POST .../result.
+
+admin.post("/commands", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const deviceId = asString(body?.device_id, "device_id", { max: 100 });
+  if (!deviceId.ok) return c.json({ error: deviceId.error }, 400);
+  const kind = asEnum(body?.kind, "kind", COMMAND_KINDS);
+  if (!kind.ok) return c.json({ error: kind.error }, 400);
+  const scheduledFor = asOptionalInt(body?.scheduled_for, "scheduled_for", { min: 0 });
+  if (!scheduledFor.ok) return c.json({ error: scheduledFor.error }, 400);
+  // Derive requested_by from the X-Auth-Email header (set by Cloudflare Access)
+  const rawEmail = c.req.header("X-Auth-Email") ?? "";
+  const trimmed = rawEmail.trim();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const requestedBy = trimmed.length > 0 && trimmed.length <= 254 && emailRegex.test(trimmed) ? trimmed : "unknown";
+  const params = body?.params;
+  if (
+    params !== undefined &&
+    (typeof params !== "object" || params === null || Array.isArray(params))
+  ) {
+    return c.json({ error: "params must be an object" }, 400);
+  }
+
+  const dev = await c.env.DB.prepare("SELECT id, agent_id FROM devices WHERE id = ?1")
+    .bind(deviceId.value)
+    .first<{ id: string; agent_id: string }>();
+  if (!dev) return c.json({ error: "device not found" }, 404);
+
+  const id = newId("cmd");
+  await c.env.DB.prepare(
+    `INSERT INTO commands
+       (id, device_id, agent_id, kind, params, status, scheduled_for, requested_by, created_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?7, ?8)`,
+  )
+    .bind(
+      id,
+      dev.id,
+      dev.agent_id,
+      kind.value,
+      params !== undefined ? JSON.stringify(params) : null,
+      scheduledFor.value ?? null,
+      requestedBy,
+      nowSeconds(),
+    )
+    .run();
+  return c.json({ id, status: "pending" }, 201);
+});
+
+// One-shot download of a sensitive-export artifact. Purged on read — the
+// secret-bearing /export body is delivered exactly once and never re-served.
+admin.get("/commands/:id/artifact", async (c) => {
+  const id = c.req.param("id");
+  const row = await c.env.DB.prepare(
+    `WITH old AS (
+       SELECT artifact FROM commands WHERE id = ?1 AND artifact IS NOT NULL
+     )
+     UPDATE commands SET artifact = NULL
+     WHERE id = ?1 AND artifact IS NOT NULL
+     RETURNING (SELECT artifact FROM old) AS artifact`
+  )
+    .bind(id)
+    .first<{ artifact: string | null }>();
+  if (!row || row.artifact === null) {
+    // Either the row doesn't exist, or artifact was already NULL (already downloaded)
+    const cmd = await c.env.DB.prepare("SELECT id, status FROM commands WHERE id = ?1").bind(id).first<{ id: string; status: string }>();
+    if (!cmd) return c.json({ error: "not found" }, 404);
+    if (cmd.status === "pending" || cmd.status === "claimed") {
+      return c.json({ error: "command not yet ready" }, 202);
+    }
+    return c.json({ error: "no artifact — already downloaded, or none produced" }, 410);
+  }
+  return c.text(row.artifact, 200, {
+    "content-type": "text/plain; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+  });
+});
+
+// --- Backups --------------------------------------------------------------
+// The agent uploads encrypted backups via PUT /v1/ingest/backups/...; these
+// admin endpoints let the Pro UI list and download them. The body in R2 is
+// already AES-encrypted by RouterOS, so the worker never holds plaintext.
+
+admin.get("/devices/:id/backups", async (c) => {
+  const id = c.req.param("id");
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, file_name, size_bytes, sha256, created_at
+       FROM backup_files
+      WHERE device_id = ?1
+   ORDER BY created_at DESC
+      LIMIT 200`,
+  )
+    .bind(id)
+    .all();
+  return c.json({ backups: results });
+});
+
+// Stream the encrypted backup body from R2. The Pro UI proxies this so the
+// browser never talks to R2 directly. No caching headers — the body is a
+// sensitive ciphertext blob, and we don't want intermediates retaining it.
+admin.get("/backups/:id/download", async (c) => {
+  const id = c.req.param("id");
+  const row = await c.env.DB.prepare(
+    "SELECT file_name, r2_key, sha256 FROM backup_files WHERE id = ?1",
+  )
+    .bind(id)
+    .first<{ file_name: string; r2_key: string; sha256: string }>();
+  if (!row) return c.json({ error: "not found" }, 404);
+
+  const obj = await c.env.BACKUPS.get(row.r2_key);
+  if (!obj) {
+    // D1 row exists but R2 body is missing — orphan. Surface as 410 so the UI
+    // can prune the listing without 5xx-style panic.
+    return c.json({ error: "backup body missing from storage" }, 410);
+  }
+  // Use the live R2 object size so a stale catalog row can't cause clients to
+  // truncate or hang. `obj.size` is set by R2 on PUT.
+  const headers: Record<string, string> = {
+    "content-type": "application/octet-stream",
+    "content-disposition": `attachment; filename="${row.file_name}"`,
+    "x-content-sha256": row.sha256,
+    "Cache-Control": "no-store",
+  };
+  if (typeof obj.size === "number") {
+    headers["content-length"] = String(obj.size);
+  }
+  return new Response(obj.body, { headers });
 });
 
 export default admin;
