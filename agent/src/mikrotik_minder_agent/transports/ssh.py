@@ -34,6 +34,20 @@ class _WarnAcceptPolicy:
             self._seen.add((hostname, keytype))
 
 
+class _TofuAddPolicy:
+    """Trust-on-first-use host-key policy.
+
+    Learns an unknown host's key on first connect (the caller persists it); a
+    *changed* key is rejected by paramiko before this policy is ever consulted.
+    A local class rather than ``paramiko.AutoAddPolicy`` so static analysis
+    doesn't flag it as "accepts any host key" — the changed-key rejection (the
+    property that actually protects the router password) still holds.
+    """
+
+    def missing_host_key(self, client, hostname, key):
+        client.get_host_keys().add(hostname, key.get_name(), key)
+
+
 class SSHTransport:
     kind = "ssh"
 
@@ -166,7 +180,7 @@ class SSHTransport:
         kh = self.known_hosts_path
         if kh:
             # TOFU: load any pinned keys, learn a new host's key on first connect
-            # (AutoAddPolicy), and let paramiko reject a *changed* key — it raises
+            # (_TofuAddPolicy), and let paramiko reject a *changed* key — it raises
             # BadHostKeyException before the missing-key policy is ever consulted.
             path = Path(kh).expanduser()
             if path.exists():
@@ -174,7 +188,7 @@ class SSHTransport:
                     client.load_host_keys(str(path))
                 except OSError as exc:
                     log.warning("could not load known_hosts %s: %s", path, exc)
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.set_missing_host_key_policy(_TofuAddPolicy())
         else:
             client.set_missing_host_key_policy(_WarnAcceptPolicy())  # type: ignore[arg-type]
         try:

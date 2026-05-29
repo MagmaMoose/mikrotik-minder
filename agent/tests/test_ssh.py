@@ -85,15 +85,11 @@ def _fake_paramiko(recorded: dict):
         def close(self) -> None:
             pass
 
-    class AutoAddPolicy:
-        pass
-
     class SSHException(Exception):
         pass
 
     ns = type("FakeParamiko", (), {})
     ns.SSHClient = FakeClient
-    ns.AutoAddPolicy = AutoAddPolicy
     ns.SSHException = SSHException
     return ns
 
@@ -111,5 +107,5 @@ def test_open_session_pins_host_keys_when_configured(tmp_path: Path) -> None:
     kh = tmp_path / "router_known_hosts"
     t = SSHTransport(_device(), Defaults(ssh=SSHDefaults(known_hosts_path=str(kh))))
     t._open_session(_fake_paramiko(recorded))
-    assert recorded["policy"] == "AutoAddPolicy"
+    assert recorded["policy"] == "_TofuAddPolicy"
     assert recorded.get("saved") == str(kh)  # persisted for next-connect verification
