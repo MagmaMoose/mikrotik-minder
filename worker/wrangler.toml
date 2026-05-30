@@ -71,7 +71,7 @@ DEFAULT_GRACE_SECONDS = "600"
 SLACK_SUCCESS_CHANNEL = "C0B5BJDHZTM"
 SLACK_FAILURE_CHANNEL = "C0A9FT7355Z"
 SLACK_INFO_CHANNEL = "C0A9RSQ3G92"
-PRO_UI_URL = "https://mikrotik-minder-pro.pages.dev"
+PRO_UI_URL = "https://dunmir.magmamoose.com"
 
 [env.prod.observability]
 enabled = true
