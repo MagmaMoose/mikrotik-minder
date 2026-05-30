@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.5.2 (2026-05-30)
+
+### Bug Fixes
+
+- **agent**: Harden SSH errors, host-key verification, and false-alert paths
+  ([#28](https://github.com/MagmaMoose/mikrotik-minder/pull/28),
+  [`a4d808e`](https://github.com/MagmaMoose/mikrotik-minder/commit/a4d808e1adb3ca3958ec064fb8872ea339f77770))
+
+- **agent**: Use a custom TOFU host-key policy instead of paramiko.AutoAddPolicy
+  ([#28](https://github.com/MagmaMoose/mikrotik-minder/pull/28),
+  [`a4d808e`](https://github.com/MagmaMoose/mikrotik-minder/commit/a4d808e1adb3ca3958ec064fb8872ea339f77770))
+
+
 ## v1.5.1 (2026-05-29)
 
 ### Bug Fixes
