@@ -2,6 +2,59 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-05-31)
+
+### Build System
+
+- **deps**: Bump docker/login-action from 3.7.0 to 4.2.0
+  ([#26](https://github.com/MagmaMoose/mikrotik-minder/pull/26),
+  [`32be553`](https://github.com/MagmaMoose/mikrotik-minder/commit/32be5535fcab9c80458998e7cd993891a559dfb7))
+
+- **deps**: Bump docker/metadata-action from 5.10.0 to 6.1.0
+  ([#24](https://github.com/MagmaMoose/mikrotik-minder/pull/24),
+  [`516c811`](https://github.com/MagmaMoose/mikrotik-minder/commit/516c811c03059e7d7872dab0713136b6de71175e))
+
+- **deps**: Bump docker/setup-buildx-action from 3.12.0 to 4.1.0
+  ([#22](https://github.com/MagmaMoose/mikrotik-minder/pull/22),
+  [`b2f2081`](https://github.com/MagmaMoose/mikrotik-minder/commit/b2f2081cf1fdc695ed9488c6ee06ef74f3781f31))
+
+- **deps**: Bump docker/setup-qemu-action from 4.0.0 to 4.1.0
+  ([#25](https://github.com/MagmaMoose/mikrotik-minder/pull/25),
+  [`50a68b4`](https://github.com/MagmaMoose/mikrotik-minder/commit/50a68b458e1315f8e47bb2c2f3ad14d34f7a1c09))
+
+- **deps**: Bump hono from 4.12.21 to 4.12.23 in /worker
+  ([#18](https://github.com/MagmaMoose/mikrotik-minder/pull/18),
+  [`4a71b78`](https://github.com/MagmaMoose/mikrotik-minder/commit/4a71b78e5f7a6c82f2a6aa992e8d62302f1db9e9))
+
+- **deps**: Bump magmamoose/release-runner from 1.14.1 to 1.22.0
+  ([#23](https://github.com/MagmaMoose/mikrotik-minder/pull/23),
+  [`ad0332b`](https://github.com/MagmaMoose/mikrotik-minder/commit/ad0332ba4ac7963c4168a1480d43ac89b9365a5b))
+
+- **deps-dev**: Bump @cloudflare/workers-types in /worker
+  ([#19](https://github.com/MagmaMoose/mikrotik-minder/pull/19),
+  [`0996c44`](https://github.com/MagmaMoose/mikrotik-minder/commit/0996c44cbc0234ae06c661482bd0d402281770d9))
+
+- **deps-dev**: Bump typescript from 5.9.3 to 6.0.3 in /worker
+  ([#20](https://github.com/MagmaMoose/mikrotik-minder/pull/20),
+  [`3d60f72`](https://github.com/MagmaMoose/mikrotik-minder/commit/3d60f726259f1f5f538d08a339526d33377a9e6b))
+
+- **deps-dev**: Bump wrangler from 4.93.0 to 4.95.0 in /worker
+  ([#21](https://github.com/MagmaMoose/mikrotik-minder/pull/21),
+  [`c6492bb`](https://github.com/MagmaMoose/mikrotik-minder/commit/c6492bbb4c11babe62678853bebcda33463c3465))
+
+### Chores
+
+- **worker**: Point PRO_UI_URL at https://dunmir.magmamoose.com
+  ([#29](https://github.com/MagmaMoose/mikrotik-minder/pull/29),
+  [`59eb90f`](https://github.com/MagmaMoose/mikrotik-minder/commit/59eb90f3e49bfa53b34b2cd885f594dc71444b33))
+
+### Features
+
+- **agent**: Device inventory probe (CHR/licence/cloud) + packet-loss ping
+  ([#30](https://github.com/MagmaMoose/mikrotik-minder/pull/30),
+  [`ef61a1f`](https://github.com/MagmaMoose/mikrotik-minder/commit/ef61a1fb49e1b70445f0fc61eee2871b0f35a991))
+
+
 ## v1.5.2 (2026-05-30)
 
 ### Bug Fixes
